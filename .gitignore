@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+townshipos.db
+models/*.pkl
+.env
+.streamlit/secrets.toml
