@@ -48,29 +48,36 @@ def _month_starts():
         d = (d.replace(day=1) + timedelta(days=32)).replace(day=1)
 
 
+# Monthly breakdown hazard. Tune here if the label base rate or model AUC drifts (see tests).
+HAZARD = {"intercept": -8.0, "age": 0.25, "dss": 0.02, "vib": 4.0, "vib_knee": 0.70}
+
+
 def gen_service_logs(assets, rng=None):
-    """Monthly walk per asset. Breakdown probability rises with age, days since service
-    and vibration, so the label is learnable but not trivial."""
+    """Monthly walk per asset. Breakdown hazard rises with age, days since service and current vibration.
+    Each log records the vibration measured AFTER the event (post-service condition), so assets that
+    reset poorly (high residual wear) are visibly riskier in the data."""
     rng = rng or random.Random(SEED + 1)
     logs = []
     for a in assets:
         _, _, _, interval, runtime = ASSET_TYPES[a["type"]]
         installed = date.fromisoformat(a["installed_at"])
-        vib = rng.uniform(0.2, 0.5)
+        vib = rng.uniform(0.25, 0.45)
+        wear = rng.uniform(0.45, 0.9)              # latent condition: residual vibration after a service
         last_service = START - timedelta(days=rng.randint(10, 120))
         for m0 in _month_starts():
             age_years = (m0 - installed).days / 365
             if (m0 - last_service).days >= interval * 30 - 5:
                 d = m0 + timedelta(days=rng.randint(0, 6))
+                last_service, vib = d, max(0.2, vib * wear)
                 logs.append(_log(a, d, "scheduled", runtime, vib, rng))
-                last_service, vib = d, max(0.2, vib * 0.6)
             dss = (m0 - last_service).days
-            p = 0.015 + 0.006 * age_years + 0.0009 * dss + 0.12 * max(0.0, vib - 0.6)
-            if rng.random() < min(p, 0.6):
+            h = HAZARD
+            logit = h["intercept"] + h["age"] * age_years + h["dss"] * dss + h["vib"] * (vib - h["vib_knee"])
+            if rng.random() < 1 / (1 + math.exp(-logit)):
                 d = m0 + timedelta(days=rng.randint(7, 27))
+                last_service, vib = d, max(0.2, vib * min(1.0, wear + 0.1))
                 logs.append(_log(a, d, "breakdown", runtime, vib, rng))
-                last_service, vib = d, max(0.2, vib * 0.7)
-            vib = min(1.5, vib + rng.uniform(0.02, 0.08) + 0.01 * age_years)
+            vib = min(1.5, vib + rng.uniform(0.04, 0.10) + 0.01 * age_years)
     return sorted(logs, key=lambda l: (l["asset_id"], l["date"]))
 
 
