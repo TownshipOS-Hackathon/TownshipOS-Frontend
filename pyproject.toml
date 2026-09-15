@@ -1,0 +1,22 @@
+[project]
+name = "townshipos"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "streamlit>=1.40",
+    "anthropic>=1.0",
+    "pydantic>=2.7",
+    "pandas>=2.2",
+    "scikit-learn>=1.5",
+    "pillow>=10",
+]
+
+[dependency-groups]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.uv]
+package = false
