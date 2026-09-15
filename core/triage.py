@@ -1,6 +1,7 @@
 """Complaint triage: Claude classifies (vision + structured output); Python routes."""
 import base64
 import io
+import math
 from datetime import datetime
 from typing import Literal
 
@@ -150,12 +151,39 @@ def triage(text: str, image_bytes: bytes | None = None, media_type: str | None =
     return TriageResult(**data)
 
 
-def insert_ticket(conn, raw_text: str, image_path: str | None) -> int:
+def insert_ticket(conn, raw_text: str, image_path: str | None,
+                  lat: float | None = None, lon: float | None = None,
+                  location_note: str | None = None) -> int:
     """Insert the raw complaint BEFORE calling the model, so nothing is ever lost."""
-    cur = conn.execute("INSERT INTO tickets(created_at, raw_text, image_path) VALUES(?,?,?)",
-                       (datetime.now().isoformat(timespec="minutes"), raw_text, image_path))
+    cur = conn.execute(
+        "INSERT INTO tickets(created_at, raw_text, image_path, latitude, longitude, location_note) "
+        "VALUES(?,?,?,?,?,?)",
+        (datetime.now().isoformat(timespec="minutes"), raw_text, image_path, lat, lon, location_note))
     conn.commit()
     return cur.lastrowid
+
+
+def _haversine_m(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    a = math.sin(math.radians(lat2 - lat1) / 2) ** 2 + \
+        math.cos(phi1) * math.cos(phi2) * math.sin(math.radians(lon2 - lon1) / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
+
+
+def find_duplicate(conn, category: str, lat: float | None, lon: float | None,
+                   radius_m: float = 100):
+    """Return an existing open ticket of the same category within radius_m metres, or None."""
+    if lat is None or lon is None:
+        return None
+    rows = conn.execute(
+        "SELECT * FROM tickets WHERE category=? AND status IN ('open','assigned') "
+        "AND latitude IS NOT NULL AND longitude IS NOT NULL ORDER BY created_at DESC LIMIT 50",
+        (category,)).fetchall()
+    for row in rows:
+        if _haversine_m(lat, lon, row["latitude"], row["longitude"]) <= radius_m:
+            return row
+    return None
 
 
 def apply_triage(conn, ticket_id: int, r: TriageResult) -> None:

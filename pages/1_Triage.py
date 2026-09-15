@@ -1,10 +1,11 @@
+import hashlib
 import json
 from pathlib import Path
 
 import streamlit as st
 
 from core.llm import LLMUnavailable
-from core.triage import apply_triage, insert_ticket, triage
+from core.triage import apply_triage, insert_ticket, prepare_image, triage
 from ui import URGENCY_COLOR, badge, db, df, header
 
 st.set_page_config(page_title="Triage · TownshipOS", layout="wide")
@@ -22,15 +23,20 @@ with left:
         st.image(photo, width=320)
     go = st.button("Triage", type="primary", use_container_width=True)
 
-if go:
+if go and not text.strip() and not photo:
+    st.error("Provide a message or a photo")
+elif go:
     image_bytes = photo.getvalue() if photo else None
     image_path = None
-    if photo:
-        image_path = f"data/uploads/{photo.name}"
-        Path("data/uploads").mkdir(parents=True, exist_ok=True)
-        Path(image_path).write_bytes(image_bytes)
     tid = None
     try:
+        if image_bytes is not None:
+            prepare_image(image_bytes)  # validate BEFORE anything touches disk or the DB
+            suffix = Path(photo.name).suffix.lower()
+            suffix = suffix if suffix in {".jpg", ".jpeg", ".png", ".webp"} else ".jpg"
+            image_path = f"data/uploads/{hashlib.sha256(image_bytes).hexdigest()[:16]}{suffix}"  # never the client's name
+            Path("data/uploads").mkdir(parents=True, exist_ok=True)
+            Path(image_path).write_bytes(image_bytes)
         tid = insert_ticket(db(), text.strip() or "(photo only)", image_path)  # saved before the model runs
         with st.spinner("Claude is reading the complaint…"):
             result = triage(text, image_bytes, photo.type if photo else None)

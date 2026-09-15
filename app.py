@@ -1,3 +1,5 @@
+import html
+
 import streamlit as st
 
 from ui import URGENCY_COLOR, badge, df, header, scored_assets

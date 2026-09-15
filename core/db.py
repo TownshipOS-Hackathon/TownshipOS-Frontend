@@ -11,7 +11,10 @@ CREATE TABLE IF NOT EXISTS tickets(
   contractor TEXT, sla_hours INTEGER, reply_bm TEXT, reply_en TEXT,
   needs_human INTEGER NOT NULL DEFAULT 0,
   confidence REAL,
-  status TEXT NOT NULL DEFAULT 'untriaged'
+  status TEXT NOT NULL DEFAULT 'untriaged',
+  latitude REAL,
+  longitude REAL,
+  location_note TEXT
 );
 CREATE TABLE IF NOT EXISTS assets(
   id TEXT PRIMARY KEY,
@@ -48,4 +51,10 @@ def connect(path="townshipos.db") -> sqlite3.Connection:
     conn = sqlite3.connect(str(path), check_same_thread=False)  # Streamlit reruns on threads
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    for col in ("latitude REAL", "longitude REAL", "location_note TEXT"):
+        try:
+            conn.execute(f"ALTER TABLE tickets ADD COLUMN {col}")
+            conn.commit()
+        except sqlite3.OperationalError:
+            pass  # column already exists
     return conn
