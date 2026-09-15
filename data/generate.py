@@ -110,8 +110,23 @@ def gen_readings(rng=None):
     return rows
 
 
+# Serenia Heights, Sepang — block centroids (WGS-84). Complaints scatter ±80 m from each block.
+BLOCK_COORDS = {
+    "A": (2.8685, 101.7255),
+    "B": (2.8675, 101.7255),
+    "C": (2.8685, 101.7265),
+    "D": (2.8675, 101.7265),
+}
+
 LOCS = ["Blok A tingkat 5", "Blok B tingkat 12", "Blok C aras 3", "Blok D tingkat 8", "unit 12-3",
         "unit 7-9", "parkir B2", "lobi Blok A", "kolam renang", "surau", "taman permainan"]
+
+
+def _block_from_loc(loc: str) -> str | None:
+    for b in BLOCKS:
+        if f"Blok {b}" in loc or f"Block {b}" in loc:
+            return b
+    return None
 
 # (language, category, urgency, template)
 TEMPLATES = [
@@ -156,9 +171,16 @@ def gen_complaints(n=200, rng=None):
         lang = rng.choices(list(LANG_WEIGHTS), weights=list(LANG_WEIGHTS.values()))[0]
         _, cat, urg, tpl = rng.choice(by_lang[lang])
         ts = datetime(2026, 9, 1, 6, 0) + timedelta(minutes=rng.randint(0, 60 * 24 * 14))
+        loc = rng.choice(LOCS)
+        block = _block_from_loc(loc) or rng.choice(BLOCKS)
+        base_lat, base_lon = BLOCK_COORDS[block]
+        # scatter within ~80 m (0.0007° ≈ 78 m at this latitude)
+        lat = round(base_lat + rng.uniform(-0.0004, 0.0004), 6)
+        lon = round(base_lon + rng.uniform(-0.0004, 0.0004), 6)
         out.append({"id": i + 1, "created_at": ts.isoformat(timespec="minutes"),
-                    "text": tpl.format(loc=rng.choice(LOCS)),
-                    "language": lang, "category": cat, "urgency": urg})
+                    "text": tpl.format(loc=loc),
+                    "language": lang, "category": cat, "urgency": urg,
+                    "lat": lat, "lon": lon})
     return out
 
 
@@ -191,9 +213,10 @@ def main(db_path="townshipos.db", out_dir="data"):
         contractor, sla = ROUTING[c["category"]]
         conn.execute(
             "INSERT INTO tickets(created_at,raw_text,language,category,urgency,contractor,sla_hours,"
-            "needs_human,confidence,status) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            "needs_human,confidence,status,latitude,longitude) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
             (c["created_at"], c["text"], c["language"], c["category"], c["urgency"], contractor,
-             1 if c["urgency"] == "emergency" else sla, int(c["urgency"] == "emergency"), 0.9, "open"))
+             1 if c["urgency"] == "emergency" else sla, int(c["urgency"] == "emergency"), 0.9, "open",
+             c["lat"], c["lon"]))
     conn.commit()
     return conn
 

@@ -27,5 +27,13 @@ st.markdown(
 st.subheader("Latest tickets")
 for r in tickets.head(8).itertuples():
     st.markdown(f"{badge(r.urgency or 'untriaged', URGENCY_COLOR.get(r.urgency, '#607D8B'))} "
-                f"**#{r.id}** {r.raw_text}  \n<small>{r.category} · {r.contractor} · SLA {r.sla_hours} h</small>",
+                f"**#{r.id}** {html.escape(r.raw_text)}  \n<small>{r.category} · {r.contractor} · SLA {r.sla_hours} h</small>",
                 unsafe_allow_html=True)
+
+st.subheader("Open issue map")
+locs = df("SELECT latitude AS lat, longitude AS lon FROM tickets "
+          "WHERE status IN ('open','assigned') AND latitude IS NOT NULL")
+if locs.empty:
+    st.caption("No geo-tagged tickets yet — residents can share location via the Report page.")
+else:
+    st.map(locs, latitude="lat", longitude="lon", zoom=16)
