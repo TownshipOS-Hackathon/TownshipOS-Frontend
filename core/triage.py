@@ -8,7 +8,7 @@ import pydantic
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from core.llm import API_ERRORS, BETAS, MODEL, LLMUnavailable, cache_key, cached, get_client, refusal_reason
+from core.llm import API_ERRORS, BETAS, MODEL, cache_key, cached, get_client, refusal_reason, unavailable
 
 Category = Literal["lift", "plumbing", "electrical", "structural", "security", "landscaping", "cleanliness", "other"]
 Urgency = Literal["low", "medium", "high", "emergency"]
@@ -125,7 +125,7 @@ def _call(text: str, image_bytes: bytes | None, media_type: str | None, client) 
                 output_format=TriageLLM, output_config={"effort": "medium"},
                 betas=BETAS, fallbacks="default")
         except API_ERRORS as e:
-            raise LLMUnavailable(str(e)) from e
+            raise unavailable(e) from e
         except pydantic.ValidationError as e:
             last_error = f"invalid output: {e.error_count()} errors"
             continue

@@ -2,7 +2,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.llm import API_ERRORS, BETAS, MODEL, LLMUnavailable, cache_key, cached, get_client, refusal_reason
+from core.llm import API_ERRORS, BETAS, MODEL, cache_key, cached, get_client, refusal_reason, unavailable
 
 MAX_QUESTION = 1000
 DOCS_DIR = Path("data/docs")
@@ -47,7 +47,7 @@ def _call(question: str, docs: list[dict], client) -> dict:
         ) as stream:
             r = stream.get_final_message()
     except API_ERRORS as e:
-        raise LLMUnavailable(str(e)) from e
+        raise unavailable(e) from e
     reason = refusal_reason(r)
     if reason:
         return {"text": reason, "citations": [], "refused": True}

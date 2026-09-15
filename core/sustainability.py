@@ -3,7 +3,7 @@ import json
 
 import pandas as pd
 
-from core.llm import API_ERRORS, BETAS, MODEL, LLMUnavailable, cache_key, cached, get_client, refusal_reason
+from core.llm import API_ERRORS, BETAS, MODEL, cache_key, cached, get_client, refusal_reason, unavailable
 
 GRID_FACTOR_KG_PER_KWH = 0.74   # Energy Commission Malaysia, Peninsular grid emission factor (2024)
 UTILITIES = {"kwh": "electricity", "m3": "water"}
@@ -65,7 +65,7 @@ def _call(prompt: str, client) -> dict:
         ) as stream:
             r = stream.get_final_message()
     except API_ERRORS as e:
-        raise LLMUnavailable(str(e)) from e
+        raise unavailable(e) from e
     reason = refusal_reason(r)
     if reason:
         return {"text": f"Report not generated: {reason}"}

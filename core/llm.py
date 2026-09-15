@@ -53,4 +53,12 @@ def refusal_reason(response):
     return getattr(details, "explanation", None) or "Request declined by the safety system"
 
 
-API_ERRORS = (anthropic.APIConnectionError, anthropic.APIStatusError)
+# AnthropicError covers connection/status/auth; the SDK raises a bare TypeError when no credentials resolve.
+API_ERRORS = (anthropic.AnthropicError, TypeError)
+
+
+def unavailable(e: Exception) -> LLMUnavailable:
+    """Wrap an SDK failure in LLMUnavailable with a message a demo audience can read."""
+    if "authentication method" in str(e):
+        return LLMUnavailable("No Anthropic API key found. Set ANTHROPIC_API_KEY (cached demo responses still work).")
+    return LLMUnavailable(f"{type(e).__name__}: {e}")
