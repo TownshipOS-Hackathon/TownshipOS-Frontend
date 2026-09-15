@@ -14,6 +14,7 @@ URGENCIES = ["low", "medium", "high", "emergency"]
 END = date(2026, 8, 31)                       # last month in history = 2026-08
 START = date(2024, 9, 1)                      # 24 months
 
+PREFIX = {"lift": "L", "pump": "P", "genset": "GS", "chiller": "CH", "gate": "GT"}
 ASSET_TYPES = {  # type: (per block, contractor, sla_hours, service interval months, runtime h/month)
     "lift": (4, "OTIS Malaysia", 4, 3, 500),
     "pump": (4, "AquaFix Plumbing Sdn Bhd", 8, 6, 300),
@@ -31,8 +32,8 @@ def gen_assets(rng=None):
             for i in range(1, n + 1):
                 age_years = rng.uniform(1, 12)
                 out.append({
-                    "id": f"{typ[0].upper()}{i}-{block}",
-                    "name": f"{typ.title()} {typ[0].upper()}{i}, Block {block}",
+                    "id": f"{PREFIX[typ]}{i}-{block}",
+                    "name": f"{typ.title()} {PREFIX[typ]}{i}, Block {block}",
                     "type": typ, "block": block,
                     "installed_at": (START - timedelta(days=365 * age_years)).isoformat(),
                     "contractor": contractor, "sla_hours": sla,

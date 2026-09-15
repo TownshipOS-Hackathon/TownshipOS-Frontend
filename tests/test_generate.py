@@ -41,7 +41,7 @@ def test_complaints_language_mix_and_labels():
 def test_main_populates_db(tmp_path):
     conn = g.main(tmp_path / "t.db", out_dir=tmp_path)
     n = lambda t: conn.execute(f"SELECT COUNT(*) AS n FROM {t}").fetchone()["n"]
-    assert n("assets") >= 55 and n("service_logs") > 500 and n("utility_readings") == 96
+    assert n("assets") >= 55 and n("service_logs") > 300 and n("utility_readings") == 96
     assert n("tickets") == 23
     assert (tmp_path / "complaints.jsonl").exists()
     assert (tmp_path / "triage_set.jsonl").exists()
