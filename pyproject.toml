@@ -10,6 +10,7 @@ dependencies = [
     "scikit-learn>=1.5",
     "pillow>=10",
     "streamlit-js-eval>=0.1.9",
+    "openai>=1.0",
 ]
 
 [dependency-groups]

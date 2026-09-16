@@ -6,6 +6,7 @@ import streamlit as st
 
 from core.llm import LLMUnavailable
 from core.triage import apply_triage, insert_ticket, prepare_image, triage
+from core.voice import TranscriptionUnavailable, transcribe
 from ui import URGENCY_COLOR, badge, db, df, header
 
 st.set_page_config(page_title="Triage · TownshipOS", layout="wide")
@@ -16,7 +17,19 @@ left, right = st.columns([1, 1])
 with left:
     st.caption("Simulated WhatsApp intake")
     pick = st.selectbox("Load a sample message", ["(type your own)"] + [s["text"] for s in samples])
-    text = st.text_area("Resident message", value="" if pick.startswith("(") else pick, height=120,
+    voice = st.file_uploader("Voice note (optional)", type=["mp3", "wav", "m4a", "ogg", "webm", "mp4"])
+    transcript = ""
+    if voice:
+        with st.spinner("Transcribing via Whisper…"):
+            try:
+                transcript = transcribe(voice.getvalue(), voice.name)
+                st.caption(f"Transcribed: {transcript}")
+            except (TranscriptionUnavailable, Exception) as e:
+                st.warning(f"Voice transcription unavailable: {e}")
+    default_text = "" if pick.startswith("(") else pick
+    if not default_text:
+        default_text = transcript
+    text = st.text_area("Resident message", value=default_text, height=120,
                         placeholder="Lif rosak tingkat 5, bunyi pelik")
     photo = st.file_uploader("Photo (optional)", type=["jpg", "jpeg", "png", "webp"])
     if photo:

@@ -6,6 +6,7 @@ from streamlit_js_eval import get_geolocation
 
 from core.llm import LLMUnavailable
 from core.triage import apply_triage, find_duplicate, insert_ticket, prepare_image, triage
+from core.voice import TranscriptionUnavailable, transcribe
 from ui import URGENCY_COLOR, badge, db, header
 
 st.set_page_config(page_title="Report an Issue · TownshipOS", layout="centered")
@@ -27,8 +28,21 @@ photo = st.file_uploader("Photo (optional but very helpful)", type=["jpg", "jpeg
 if photo:
     st.image(photo, use_container_width=True)
 
+voice = st.file_uploader("Voice note (optional)", type=["mp3", "wav", "m4a", "ogg", "webm", "mp4"])
+transcript = ""
+if voice:
+    with st.spinner("Transcribing voice note via Whisper…"):
+        try:
+            transcript = transcribe(voice.getvalue(), voice.name)
+            st.caption(f"Transcribed: {transcript}")
+        except TranscriptionUnavailable as e:
+            st.warning(str(e))
+        except Exception as e:
+            st.warning(f"Could not transcribe audio: {e}")
+
 text = st.text_area(
     "Describe the problem",
+    value=transcript,
     height=120,
     placeholder="E.g. Lubang besar di jalan masuk Block C / Lift stuck at level 5, making loud noise",
 )
