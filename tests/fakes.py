@@ -1,53 +1,52 @@
-"""Fake Anthropic client. Mimics only what core/ touches on client.beta.messages."""
-from contextlib import contextmanager
+"""Fake OpenAI-compatible client. Mimics client.chat.completions.create()."""
+import json
 from types import SimpleNamespace as NS
 
 
-class _Messages:
+class _Completions:
     def __init__(self, responses):
         self.responses = list(responses)
-        self.calls = []  # kwargs of every call, for assertions
+        self.calls = []
 
-    def _next(self, kw):
+    def create(self, **kw):
         self.calls.append(kw)
         if not self.responses:
             raise AssertionError("FakeClient ran out of responses")
         return self.responses.pop(0)
 
-    def parse(self, **kw):
-        return self._next(kw)
-
-    @contextmanager
-    def stream(self, **kw):
-        r = self._next(kw)
-        yield NS(get_final_message=lambda: r)
-
 
 class FakeClient:
     def __init__(self, *responses):
-        self.beta = NS(messages=_Messages(responses))
+        comps = _Completions(responses)
+        self.chat = NS(completions=comps)
+        self._completions = comps
 
     @property
     def calls(self):
-        return self.beta.messages.calls
+        return self._completions.calls
 
 
-def parsed(obj, stop_reason="end_turn"):
-    return NS(stop_reason=stop_reason, parsed_output=obj, stop_details=None, content=[])
+def tool_result(obj, finish_reason="tool_calls"):
+    """Triage happy path: response carries a tool_call with JSON arguments."""
+    args = json.dumps(obj.model_dump() if hasattr(obj, "model_dump") else obj)
+    tool_call = NS(function=NS(arguments=args, name="triage"), id="tc1", type="function")
+    msg = NS(tool_calls=[tool_call], content=None)
+    return NS(choices=[NS(message=msg, finish_reason=finish_reason)])
+
+
+def incomplete(finish_reason="length"):
+    """Simulate truncated output (no tool_call, length finish_reason) → triage retries."""
+    msg = NS(content=None, tool_calls=None)
+    return NS(choices=[NS(message=msg, finish_reason=finish_reason)])
 
 
 def refusal(explanation="declined by safety system"):
-    return NS(stop_reason="refusal", parsed_output=None, content=[],
-              stop_details=NS(type="refusal", category="other", explanation=explanation))
+    """No tool_call + text content. Triage falls back; assistant/sustainability return the text."""
+    msg = NS(content=explanation, tool_calls=None)
+    return NS(choices=[NS(message=msg, finish_reason="stop")])
 
 
-def text_block(text, citations=None):
-    return NS(type="text", text=text, citations=citations)
-
-
-def citation(title, cited_text):
-    return NS(type="char_location", document_title=title, cited_text=cited_text, document_index=0)
-
-
-def message(*blocks, stop_reason="end_turn"):
-    return NS(stop_reason=stop_reason, content=list(blocks), stop_details=None)
+def text_result(text, finish_reason="stop"):
+    """Plain text response for assistant and sustainability."""
+    msg = NS(content=text, tool_calls=None)
+    return NS(choices=[NS(message=msg, finish_reason=finish_reason)])

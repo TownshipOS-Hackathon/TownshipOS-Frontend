@@ -1,6 +1,7 @@
 """Complaint triage: Claude classifies (vision + structured output); Python routes."""
 import base64
 import io
+import json
 import math
 from datetime import datetime
 from typing import Literal
@@ -9,7 +10,7 @@ import pydantic
 from PIL import Image, UnidentifiedImageError
 from pydantic import BaseModel, Field
 
-from core.llm import API_ERRORS, BETAS, MODEL, cache_key, cached, get_client, refusal_reason, unavailable
+from core.llm import API_ERRORS, MODEL, cache_key, cached, get_client, unavailable
 
 Category = Literal["lift", "plumbing", "electrical", "structural", "security", "landscaping", "cleanliness", "other"]
 Urgency = Literal["low", "medium", "high", "emergency"]
@@ -111,32 +112,50 @@ def _finalize(llm: TriageLLM) -> TriageResult:
     return TriageResult(**llm.model_dump(), contractor=contractor, sla_hours=sla, needs_human=needs_human)
 
 
+_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "triage",
+        "description": "Classify this resident complaint",
+        "parameters": None,  # set at module load after TriageLLM is defined
+    },
+}
+
+
 def _call(text: str, image_bytes: bytes | None, media_type: str | None, client) -> dict:
     content = []
     if image_bytes is not None:
         b64, mt = prepare_image(image_bytes, media_type)
-        content.append({"type": "image", "source": {"type": "base64", "media_type": mt, "data": b64}})
+        content.append({"type": "image_url", "image_url": {"url": f"data:{mt};base64,{b64}"}})
     content.append({"type": "text", "text": text or "(no text, photo only)"})
+    tool = {**_TOOL, "function": {**_TOOL["function"], "parameters": TriageLLM.model_json_schema()}}
     last_error = "unknown"
     for _ in range(2):  # one retry on incomplete/invalid output
         try:
-            r = client.beta.messages.parse(
-                model=MODEL, max_tokens=2048, system=SYSTEM,
-                messages=[{"role": "user", "content": content}],
-                output_format=TriageLLM, output_config={"effort": "medium"},
-                betas=BETAS, fallbacks="default")
+            r = client.chat.completions.create(
+                model=MODEL, max_tokens=2048,
+                messages=[{"role": "system", "content": SYSTEM},
+                          {"role": "user", "content": content}],
+                tools=[tool],
+                tool_choice={"type": "function", "function": {"name": "triage"}},
+            )
         except API_ERRORS as e:
             raise unavailable(e) from e
-        except pydantic.ValidationError as e:
-            last_error = f"invalid output: {e.error_count()} errors"
+        choice = r.choices[0]
+        if choice.finish_reason == "length":
+            last_error = "incomplete output (finish_reason=length)"
             continue
-        reason = refusal_reason(r)
-        if reason:
-            return _fallback(reason).model_dump()
-        if r.stop_reason == "max_tokens" or r.parsed_output is None:
-            last_error = f"incomplete output (stop_reason={r.stop_reason})"
+        tool_calls = getattr(choice.message, "tool_calls", None)
+        if not tool_calls:
+            last_error = getattr(choice.message, "content", None) or "no tool call in response"
+            return _fallback(last_error).model_dump()
+        try:
+            llm_data = json.loads(tool_calls[0].function.arguments)
+            parsed_llm = TriageLLM(**llm_data)
+        except (json.JSONDecodeError, pydantic.ValidationError) as e:
+            last_error = f"invalid output: {e}"
             continue
-        return _finalize(r.parsed_output).model_dump()
+        return _finalize(parsed_llm).model_dump()
     return _fallback(last_error).model_dump()
 
 

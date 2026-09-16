@@ -3,7 +3,7 @@ import pytest
 
 from core import sustainability as s
 from data import generate as g
-from tests.fakes import FakeClient, message, refusal, text_block
+from tests.fakes import FakeClient, refusal, text_result
 
 
 def test_detect_anomalies_flags_injected_spikes_only():
@@ -39,10 +39,10 @@ def test_monthly_summary():
 def test_esg_narrative_uses_client_and_caches():
     readings = pd.DataFrame(g.gen_readings())
     sm, an = s.monthly_summary(readings, "2026-08"), s.detect_anomalies(readings)
-    client = FakeClient(message(text_block("## ESG Summary\nBlock C water +42%.")))
+    client = FakeClient(text_result("## ESG Summary\nBlock C water +42%."))
     text = s.esg_narrative(sm, an, client=client)
     assert text.startswith("## ESG Summary")
-    assert "2026-08" in client.calls[0]["messages"][0]["content"]
+    assert "2026-08" in client.calls[0]["messages"][1]["content"]
     assert s.esg_narrative(sm, an, client=FakeClient()) == text  # cached
 
 

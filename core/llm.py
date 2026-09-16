@@ -1,25 +1,28 @@
-"""Shared Claude plumbing: client, on-disk response cache, refusal check."""
+"""Shared OpenRouter plumbing: client, on-disk response cache."""
 import hashlib
 import json
 import os
 from pathlib import Path
 
-import anthropic
+from openai import OpenAI, OpenAIError
 
-MODEL = "claude-opus-5"
-BETAS = ["server-side-fallback-2026-07-01"]   # enables fallbacks="default" (category-routed refusal fallback)
+MODEL = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-opus-4-5")
 CACHE_DIR = Path(os.environ.get("TOWNSHIPOS_CACHE", "cache"))
 _client = None
 
 
 class LLMUnavailable(RuntimeError):
-    """Raised after the SDK's own retries are exhausted. Callers fall back to cache or show an error."""
+    """Raised after retries exhausted. Callers fall back to cache or show an error."""
 
 
 def get_client():
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(timeout=60.0, max_retries=2)
+        try:
+            api_key = os.environ["OPENROUTER_API_KEY"]
+        except KeyError:
+            raise LLMUnavailable("No OPENROUTER_API_KEY found. Set it (cached demo responses still work).")
+        _client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key, timeout=60.0, max_retries=2)
     return _client
 
 
@@ -45,20 +48,12 @@ def cached(key: str, fn):
     return value
 
 
-def refusal_reason(response):
-    """Explanation string if the response is a refusal, else None. Call before reading content."""
-    if getattr(response, "stop_reason", None) != "refusal":
-        return None
-    details = getattr(response, "stop_details", None)
-    return getattr(details, "explanation", None) or "Request declined by the safety system"
-
-
-# AnthropicError covers connection/status/auth; the SDK raises a bare TypeError when no credentials resolve.
-API_ERRORS = (anthropic.AnthropicError, TypeError)
+API_ERRORS = (OpenAIError, TypeError)
 
 
 def unavailable(e: Exception) -> LLMUnavailable:
     """Wrap an SDK failure in LLMUnavailable with a message a demo audience can read."""
-    if "authentication method" in str(e):
-        return LLMUnavailable("No Anthropic API key found. Set ANTHROPIC_API_KEY (cached demo responses still work).")
+    msg = str(e).lower()
+    if "api_key" in msg or "authentication" in msg or "api key" in msg:
+        return LLMUnavailable("No OPENROUTER_API_KEY found. Set it (cached demo responses still work).")
     return LLMUnavailable(f"{type(e).__name__}: {e}")

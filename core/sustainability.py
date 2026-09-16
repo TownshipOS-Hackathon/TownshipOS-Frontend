@@ -3,7 +3,7 @@ import json
 
 import pandas as pd
 
-from core.llm import API_ERRORS, BETAS, MODEL, cache_key, cached, get_client, refusal_reason, unavailable
+from core.llm import API_ERRORS, MODEL, cache_key, cached, get_client, unavailable
 
 GRID_FACTOR_KG_PER_KWH = 0.74   # Energy Commission Malaysia, Peninsular grid emission factor (2024)
 UTILITIES = {"kwh": "electricity", "m3": "water"}
@@ -58,18 +58,15 @@ def monthly_summary(readings: pd.DataFrame, month: str) -> dict:
 
 def _call(prompt: str, client) -> dict:
     try:
-        with client.beta.messages.stream(
-            model=MODEL, max_tokens=2048, system=SYSTEM,
-            messages=[{"role": "user", "content": prompt}],
-            output_config={"effort": "medium"}, betas=BETAS, fallbacks="default",
-        ) as stream:
-            r = stream.get_final_message()
+        r = client.chat.completions.create(
+            model=MODEL, max_tokens=2048,
+            messages=[{"role": "system", "content": SYSTEM},
+                      {"role": "user", "content": prompt}],
+        )
+        text = r.choices[0].message.content or ""
     except API_ERRORS as e:
         raise unavailable(e) from e
-    reason = refusal_reason(r)
-    if reason:
-        return {"text": f"Report not generated: {reason}"}
-    return {"text": "".join(b.text for b in r.content if b.type == "text")}
+    return {"text": text}
 
 
 def esg_narrative(summary: dict, anomalies: pd.DataFrame, *, client=None) -> str:

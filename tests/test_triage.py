@@ -7,7 +7,8 @@ from pydantic import ValidationError
 
 from core import triage as t
 from core.db import connect
-from tests.fakes import FakeClient, parsed, refusal
+from core.llm import MODEL
+from tests.fakes import FakeClient, incomplete, refusal, tool_result
 
 
 def llm(**over):
@@ -28,19 +29,20 @@ def test_llm_model_rejects_unknown_category():
         llm(category="rocket")
 
 
-def test_triage_happy_path_calls_parse_with_expected_shape():
-    client = FakeClient(parsed(llm()))
+def test_triage_happy_path_calls_create_with_expected_shape():
+    client = FakeClient(tool_result(llm()))
     r = t.triage("Lif rosak tingkat 5, bunyi pelik", client=client)
     assert r.category == "lift" and r.contractor == "OTIS Malaysia" and r.sla_hours == 4
     assert r.needs_human is False and r.error is None
     kw = client.calls[0]
-    assert kw["model"] == "claude-opus-5" and kw["output_format"] is t.TriageLLM
-    assert kw["fallbacks"] == "default" and "server-side-fallback-2026-07-01" in kw["betas"]
-    assert kw["messages"][0]["content"][-1]["type"] == "text"
+    assert kw["model"] == MODEL
+    assert "tools" in kw and kw["tools"][0]["function"]["name"] == "triage"
+    assert kw["messages"][0]["role"] == "system"
+    assert kw["messages"][1]["content"][-1]["type"] == "text"
 
 
 def test_triage_is_cached_second_call_makes_no_request():
-    client = FakeClient(parsed(llm()))
+    client = FakeClient(tool_result(llm()))
     t.triage("same text", client=client)
     t.triage("same text", client=FakeClient())  # no responses queued: would raise if called
     assert len(client.calls) == 1
@@ -53,13 +55,13 @@ def test_triage_refusal_routes_to_human():
 
 
 def test_triage_retries_once_on_incomplete_then_falls_back():
-    client = FakeClient(parsed(None, stop_reason="max_tokens"), parsed(None, stop_reason="max_tokens"))
+    client = FakeClient(incomplete(), incomplete())
     r = t.triage("text", client=client)
     assert len(client.calls) == 2 and r.needs_human is True and "incomplete" in r.error
 
 
 def test_triage_retry_succeeds_second_time():
-    client = FakeClient(parsed(None, stop_reason="max_tokens"), parsed(llm()))
+    client = FakeClient(incomplete(), tool_result(llm()))
     assert t.triage("text2", client=client).category == "lift"
 
 
@@ -89,10 +91,10 @@ def test_prepare_image_rejects_oversize_and_bad_format():
 
 
 def test_triage_with_image_puts_image_block_first():
-    client = FakeClient(parsed(llm()))
+    client = FakeClient(tool_result(llm()))
     t.triage("leak", image_bytes=_png(100, 100), client=client)
-    content = client.calls[0]["messages"][0]["content"]
-    assert content[0]["type"] == "image" and content[0]["source"]["media_type"] == "image/jpeg"
+    content = client.calls[0]["messages"][1]["content"]
+    assert content[0]["type"] == "image_url" and "image/jpeg" in content[0]["image_url"]["url"]
 
 
 def test_ticket_insert_then_apply(tmp_path):
@@ -100,7 +102,7 @@ def test_ticket_insert_then_apply(tmp_path):
     tid = t.insert_ticket(conn, "Bocor dari atas", None)
     row = conn.execute("SELECT * FROM tickets WHERE id=?", (tid,)).fetchone()
     assert row["status"] == "untriaged" and row["raw_text"] == "Bocor dari atas"
-    result = t.triage("Bocor dari atas", client=FakeClient(parsed(llm(category="plumbing"))))
+    result = t.triage("Bocor dari atas", client=FakeClient(tool_result(llm(category="plumbing"))))
     t.apply_triage(conn, tid, result)
     row = conn.execute("SELECT * FROM tickets WHERE id=?", (tid,)).fetchone()
     assert row["status"] == "open" and row["category"] == "plumbing" and row["contractor"] == "AquaFix Plumbing Sdn Bhd"
