@@ -9,7 +9,6 @@ from core.triage import apply_triage, insert_ticket, prepare_image, triage
 from core.voice import TranscriptionUnavailable, transcribe
 from ui import URGENCY_COLOR, badge, db, df, header
 
-st.set_page_config(page_title="Triage · TownshipOS", layout="wide")
 header("Complaint Triage", "Photo + message in → category, urgency, contractor, SLA and a bilingual reply out")
 
 samples = [json.loads(l) for l in Path("data/complaints.jsonl").read_text(encoding="utf-8").splitlines()][:30]

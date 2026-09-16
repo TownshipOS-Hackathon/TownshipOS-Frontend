@@ -9,7 +9,6 @@ from core.triage import apply_triage, find_duplicate, insert_ticket, prepare_ima
 from core.voice import TranscriptionUnavailable, transcribe
 from ui import URGENCY_COLOR, badge, db, header
 
-st.set_page_config(page_title="Report an Issue · TownshipOS", layout="centered")
 header("Report an Issue", "Snap a photo · share your location · describe the problem")
 
 # --- Location capture (runs on load; browser asks permission once) ---
