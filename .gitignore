@@ -3,5 +3,7 @@ __pycache__/
 *.pyc
 townshipos.db
 models/*.pkl
+data/uploads/
+data/.llm_cache/
 .env
 .streamlit/secrets.toml

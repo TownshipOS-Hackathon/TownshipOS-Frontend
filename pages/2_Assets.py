@@ -4,7 +4,6 @@ import streamlit as st
 from core import maintenance as m
 from ui import db, df, header, scored_assets
 
-st.set_page_config(page_title="Assets · TownshipOS", layout="wide")
 header("Predictive Maintenance", "30-day failure risk per asset, from 24 months of service logs")
 
 scored, model, metrics = scored_assets()

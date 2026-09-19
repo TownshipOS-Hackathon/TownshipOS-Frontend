@@ -105,6 +105,7 @@ else:
     pg = st.navigation([
         st.Page("pages/fm_dashboard.py",      title="Dashboard",     icon=":material/dashboard:"),
         st.Page("pages/1_Triage.py",          title="Triage",        icon=":material/manage_search:"),
+        st.Page("pages/2_Assets.py",          title="Assets",        icon=":material/precision_manufacturing:"),
         st.Page("pages/fm_sustainability.py", title="Sustainability", icon=":material/eco:"),
         st.Page("pages/fm_assistant.py",      title="Assistant",     icon=":material/chat:"),
     ])

@@ -44,6 +44,13 @@ if block_rows:
     import pandas as pd
     st.dataframe(pd.DataFrame(block_rows), use_container_width=True, hide_index=True)
 
+# ── Trend ─────────────────────────────────────────────────────────────────────
+st.write("")
+section_label("Consumption Trend — All Blocks", "fa-solid fa-chart-line")
+left, right = st.columns(2)
+left.line_chart(readings.pivot(index="month", columns="block", values="kwh"), y_label="kWh")
+right.line_chart(readings.pivot(index="month", columns="block", values="m3"), y_label="m³")
+
 # ── Anomalies ─────────────────────────────────────────────────────────────────
 st.write("")
 section_label("Anomalies — All Months", "fa-solid fa-triangle-exclamation")
