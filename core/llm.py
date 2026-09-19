@@ -4,7 +4,10 @@ import json
 import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from openai import OpenAI, OpenAIError
+
+load_dotenv()
 
 MODEL = os.environ.get("OPENROUTER_MODEL", "anthropic/claude-opus-4-5")
 CACHE_DIR = Path(os.environ.get("TOWNSHIPOS_CACHE", "cache"))

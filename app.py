@@ -1,60 +1,104 @@
+import re
+
 import streamlit as st
 
-st.set_page_config(page_title="TownshipOS", page_icon="🏙️", layout="wide")
+from ui import NAVY, YELLOW, inject_css
 
-NAVY = "#0B1F3A"
-YELLOW = "#F2B705"
+st.set_page_config(page_title="TownshipOS", layout="wide")
+inject_css()
+
+# ── Demo credentials ──────────────────────────────────────────────────────────
+# Resident units: unit_code -> 4-digit PIN
+UNITS = {
+    "A1512": "1223",
+    "A1201": "4567",
+    "B0801": "8901",
+    "B1105": "2345",
+    "C0302": "6789",
+    "C0501": "3344",
+    "D0901": "5566",
+}
+# FM staff badge IDs (7-digit numbers)
+FM_BADGES = {"1234567", "7654321", "1111111", "2222222"}
+
+
+def parse_code(raw: str):
+    """Split e.g. 'A15121223' into ('A1512', '1223'). Returns (None,None) on bad format."""
+    s = raw.strip().upper()
+    m = re.match(r"^([A-Z]\d{3,5})(\d{4})$", s)
+    return (m.group(1), m.group(2)) if m else (None, None)
+
 
 role = st.session_state.get("role")
 
-# ── Landing ──────────────────────────────────────────────────────────────────
+# ── Login ─────────────────────────────────────────────────────────────────────
 if not role:
+    st.markdown("""<style>
+    section[data-testid="stSidebar"] { display: none !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+    </style>""", unsafe_allow_html=True)
+
+    # Centered hero
     st.markdown(
-        f"<div style='background:{NAVY};padding:32px 40px;border-radius:16px;margin-bottom:32px;text-align:center'>"
-        f"<div style='color:{YELLOW};font-size:13px;letter-spacing:3px;margin-bottom:8px'>SIME DARBY PROPERTY</div>"
-        f"<div style='color:white;font-size:42px;font-weight:800;margin-bottom:6px'>🏙️ TownshipOS</div>"
-        f"<div style='color:#C9D3E0;font-size:16px'>AI-powered facility management · Serenia Heights demo</div>"
+        f"<div style='background:{NAVY};padding:36px 48px;border-radius:16px;"
+        f"margin-bottom:32px;text-align:center'>"
+        f"<div style='color:{YELLOW};font-size:12px;letter-spacing:3px;font-weight:600;"
+        f"margin-bottom:10px'>SIME DARBY PROPERTY</div>"
+        f"<div style='color:white;font-size:44px;font-weight:800;letter-spacing:-0.5px;"
+        f"margin-bottom:8px'>TownshipOS</div>"
+        f"<div style='color:#8A9DB5;font-size:15px'>AI-powered facility management · Serenia Heights demo</div>"
         f"</div>",
         unsafe_allow_html=True)
 
-    col1, col2 = st.columns(2, gap="large")
-    with col1:
-        st.markdown(
-            f"<div style='background:#F0F4FF;border:2px solid #D0DCFF;border-radius:12px;padding:28px 24px'>"
-            f"<div style='font-size:36px;margin-bottom:8px'>🏠</div>"
-            f"<div style='font-size:20px;font-weight:700;color:{NAVY}'>I'm a Resident</div>"
-            f"<div style='color:#555;margin-top:6px'>Report a maintenance issue in your block. "
-            f"Takes under 2 minutes — photo and location optional.</div>"
-            f"</div>", unsafe_allow_html=True)
-        st.write("")
-        if st.button("Enter as Resident", use_container_width=True, type="primary"):
-            st.session_state.role = "resident"
-            st.rerun()
+    # Login card — centered column
+    _, col, _ = st.columns([1, 1.6, 1])
+    with col:
+        code_input = st.text_input(
+            "access_code",
+            placeholder="Enter your access code",
+            label_visibility="collapsed",
+            key="login_code",
+        )
+        if st.button("Enter", type="primary", use_container_width=True):
+            raw = code_input.strip()
+            if re.match(r"^\d{7}$", raw):
+                st.session_state.role = "fm"
+                st.rerun()
+            else:
+                unit, pin = parse_code(raw)
+                if unit is None:
+                    st.error("Residents: unit + 4-digit PIN e.g. A15121223 · Staff: 7-digit badge ID")
+                else:
+                    st.session_state.role = "resident"
+                    st.session_state.unit = unit
+                    st.rerun()
 
-    with col2:
         st.markdown(
-            f"<div style='background:#FFF8E8;border:2px solid #FFE0A0;border-radius:12px;padding:28px 24px'>"
-            f"<div style='font-size:36px;margin-bottom:8px'>🛠️</div>"
-            f"<div style='font-size:20px;font-weight:700;color:{NAVY}'>FM Staff</div>"
-            f"<div style='color:#555;margin-top:6px'>Full operations dashboard — triage queue, asset risk, "
-            f"sustainability, and the AI assistant.</div>"
-            f"</div>", unsafe_allow_html=True)
-        st.write("")
-        if st.button("Enter as FM Staff", use_container_width=True):
-            st.session_state.role = "fm"
-            st.rerun()
+            f"<div style='margin-top:14px;padding:10px 14px;background:#F4F7FB;"
+            f"border-radius:8px;font-size:12px;color:#6B7A99;line-height:1.8'>"
+            f"Resident demo: <code>A15121223</code> · <code>A12014567</code><br>"
+            f"Staff demo: <code>1234567</code> · <code>7654321</code></div>",
+            unsafe_allow_html=True)
 
 # ── Resident portal ───────────────────────────────────────────────────────────
 elif role == "resident":
+    unit = st.session_state.get("unit", "")
     with st.sidebar:
-        st.caption("TownshipOS · Resident Portal")
+        st.markdown(
+            f"<div style='padding:12px 8px 10px'>"
+            f"<div style='color:{YELLOW};font-size:10px;letter-spacing:2px;font-weight:600'>SIME DARBY PROPERTY</div>"
+            f"<div style='color:white;font-size:16px;font-weight:700;margin-top:3px'>TownshipOS</div>"
+            f"<div style='color:#6B7A99;font-size:11px;margin-top:2px'>Unit {unit}</div>"
+            f"</div>",
+            unsafe_allow_html=True)
         st.divider()
-        if st.button("← Back to home", use_container_width=True):
-            del st.session_state["role"]
+        if st.button("← Sign out", use_container_width=True):
+            for k in ("role", "unit"):
+                st.session_state.pop(k, None)
             st.rerun()
 
     pg = st.navigation(
-        [st.Page("pages/0_Report.py", title="Report an Issue", icon="📋")],
+        [st.Page("pages/0_Report.py", title="Report an Issue", icon=":material/edit_note:")],
         position="hidden",
     )
     pg.run()
@@ -62,14 +106,22 @@ elif role == "resident":
 # ── FM Staff portal ───────────────────────────────────────────────────────────
 else:
     with st.sidebar:
-        st.caption("TownshipOS · FM Staff")
+        st.markdown(
+            f"<div style='padding:12px 8px 10px'>"
+            f"<div style='color:{YELLOW};font-size:10px;letter-spacing:2px;font-weight:600'>SIME DARBY PROPERTY</div>"
+            f"<div style='color:white;font-size:16px;font-weight:700;margin-top:3px'>TownshipOS</div>"
+            f"<div style='color:#6B7A99;font-size:11px;margin-top:2px'>Facility Manager</div>"
+            f"</div>",
+            unsafe_allow_html=True)
         st.divider()
-        if st.button("← Exit to home", use_container_width=True):
-            del st.session_state["role"]
+        if st.button("← Sign out", use_container_width=True):
+            st.session_state.pop("role", None)
             st.rerun()
 
     pg = st.navigation([
-        st.Page("pages/fm_dashboard.py", title="Dashboard", icon="🏙️"),
-        st.Page("pages/1_Triage.py",     title="Triage",    icon="🔍"),
+        st.Page("pages/fm_dashboard.py",      title="Dashboard",     icon=":material/dashboard:"),
+        st.Page("pages/1_Triage.py",          title="Triage",        icon=":material/manage_search:"),
+        st.Page("pages/fm_sustainability.py", title="Sustainability", icon=":material/eco:"),
+        st.Page("pages/fm_assistant.py",      title="Assistant",     icon=":material/chat:"),
     ])
     pg.run()

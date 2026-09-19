@@ -10,6 +10,7 @@ dependencies = [
     "pillow>=10",
     "streamlit-js-eval>=0.1.9",
     "openai>=1.0",
+    "python-dotenv>=1.2.3",
 ]
 
 [dependency-groups]

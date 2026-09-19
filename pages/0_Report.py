@@ -6,53 +6,43 @@ from streamlit_js_eval import get_geolocation
 
 from core.llm import LLMUnavailable
 from core.triage import apply_triage, find_duplicate, insert_ticket, prepare_image, triage
-from core.voice import TranscriptionUnavailable, transcribe
-from ui import URGENCY_COLOR, badge, db, header
+from ui import URGENCY_COLOR, badge, db, header, section_label
 
 header("Report an Issue", "Snap a photo · share your location · describe the problem")
 
-# --- Location capture (runs on load; browser asks permission once) ---
+# Get location — toast if granted, address input if denied
 loc = get_geolocation()
 lat = lon = None
+location_note = ""
 if loc and "coords" in loc:
     lat = loc["coords"].get("latitude")
     lon = loc["coords"].get("longitude")
     acc = loc["coords"].get("accuracy", 0)
-    st.success(f"Location captured — accuracy ±{acc:.0f} m")
+    st.toast(f"Location captured — accuracy ±{acc:.0f} m")
 else:
-    st.info("Allow location access in your browser so we can pinpoint the exact spot.")
+    location_note = st.text_input(
+        "Where is the problem?",
+        placeholder="E.g. Near the lift lobby, Block C, level 3",
+    )
 
-# --- Form ---
-photo = st.file_uploader("Photo (optional but very helpful)", type=["jpg", "jpeg", "png", "webp"])
+# ── Photo ─────────────────────────────────────────────────────────────────────
+section_label("Photo", "fa-solid fa-camera")
+photo = st.file_uploader("Attach a photo (optional but very helpful)", type=["jpg", "jpeg", "png", "webp"])
 if photo:
     st.image(photo, use_container_width=True)
 
-voice = st.file_uploader("Voice note (optional)", type=["mp3", "wav", "m4a", "ogg", "webm", "mp4"])
-transcript = ""
-if voice:
-    with st.spinner("Transcribing voice note via Whisper…"):
-        try:
-            transcript = transcribe(voice.getvalue(), voice.name)
-            st.caption(f"Transcribed: {transcript}")
-        except TranscriptionUnavailable as e:
-            st.warning(str(e))
-        except Exception as e:
-            st.warning(f"Could not transcribe audio: {e}")
-
+# ── Description ───────────────────────────────────────────────────────────────
+section_label("Description", "fa-solid fa-pen-to-square")
 text = st.text_area(
     "Describe the problem",
-    value=transcript,
+    value="",
     height=120,
     placeholder="E.g. Lubang besar di jalan masuk Block C / Lift stuck at level 5, making loud noise",
 )
-
-location_note = st.text_input(
-    "Exact spot (optional)",
-    placeholder="E.g. Near the letterbox at Block A entrance, third pillar from left",
-)
-
+st.write("")
 go = st.button("Submit Report", type="primary", use_container_width=True)
 
+# ── Validation & submission ───────────────────────────────────────────────────
 if go and not text.strip() and not photo:
     st.error("Please describe the problem or attach a photo.")
 elif go:
