@@ -12,7 +12,7 @@ TownshipOS turns the daily grind of managing a residential township into a near-
 | Portal | Who uses it | What they can do |
 |--------|-------------|------------------|
 | Resident | Unit owners / tenants | Report issues with photo + location, track ticket status |
-| Facility Manager | On-site FM staff | AI triage console, live dashboard, sustainability monitor, SOP assistant |
+| Facility Manager | On-site FM staff | AI triage console, live dashboard, predictive maintenance, sustainability monitor, SOP assistant |
 
 ---
 
@@ -34,6 +34,13 @@ TownshipOS turns the daily grind of managing a residential township into a near-
 - Claude classifies complaint → assigns category, urgency, contractor, SLA
 - Drafted bilingual reply ready to send
 - Live ticket queue with status filter
+
+**Predictive Maintenance** (`pages/2_Assets.py`)
+- Gradient Boosting model scores all 48 assets by 30-day failure probability
+- Top-risk asset surfaced with its contributing drivers and assigned contractor
+- One-click pre-emptive work order (scheduled, not emergency — cheaper than a breakdown)
+- Feature importance chart and cross-validated AUC, so the model isn't a black box
+- Per-asset service history
 
 **Dashboard** (`pages/fm_dashboard.py`)
 - Open ticket count, emergency count, average resolution time
@@ -88,6 +95,7 @@ townshipos/
 ├── pages/
 │   ├── 0_Report.py         # Resident: report an issue
 │   ├── 1_Triage.py         # FM: complaint triage console
+│   ├── 2_Assets.py         # FM: predictive maintenance
 │   ├── fm_dashboard.py     # FM: live operations dashboard
 │   ├── fm_sustainability.py# FM: water & energy monitoring
 │   └── fm_assistant.py     # FM: SOP / SLA knowledge assistant
