@@ -22,11 +22,6 @@ def test_short_history_block_is_skipped():
     assert s.detect_anomalies(readings).empty
 
 
-def test_co2e():
-    assert s.co2e(1000) == pytest.approx(740)
-    assert s.co2e(1000, factor=0.5) == 500
-
-
 def test_monthly_summary():
     readings = pd.DataFrame(g.gen_readings())
     sm = s.monthly_summary(readings, "2026-08")

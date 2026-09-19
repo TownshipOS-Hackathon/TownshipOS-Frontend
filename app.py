@@ -7,26 +7,10 @@ from ui import NAVY, YELLOW, inject_css
 st.set_page_config(page_title="TownshipOS", layout="wide")
 inject_css()
 
-# ── Demo credentials ──────────────────────────────────────────────────────────
-# Resident units: unit_code -> 4-digit PIN
-UNITS = {
-    "A1512": "1223",
-    "A1201": "4567",
-    "B0801": "8901",
-    "B1105": "2345",
-    "C0302": "6789",
-    "C0501": "3344",
-    "D0901": "5566",
-}
-# FM staff badge IDs (7-digit numbers)
-FM_BADGES = {"1234567", "7654321", "1111111", "2222222"}
-
-
-def parse_code(raw: str):
-    """Split e.g. 'A15121223' into ('A1512', '1223'). Returns (None,None) on bad format."""
-    s = raw.strip().upper()
-    m = re.match(r"^([A-Z]\d{3,5})(\d{4})$", s)
-    return (m.group(1), m.group(2)) if m else (None, None)
+def parse_unit(raw: str) -> str | None:
+    """'A15121223' -> 'A1512'. None on bad format. Demo mode: format is the only check."""
+    m = re.match(r"^([A-Z]\d{3,5})\d{4}$", raw.strip().upper())
+    return m.group(1) if m else None
 
 
 role = st.session_state.get("role")
@@ -65,7 +49,7 @@ if not role:
                 st.session_state.role = "fm"
                 st.rerun()
             else:
-                unit, pin = parse_code(raw)
+                unit = parse_unit(raw)
                 if unit is None:
                     st.error("Residents: unit + 4-digit PIN e.g. A15121223 · Staff: 7-digit badge ID")
                 else:
