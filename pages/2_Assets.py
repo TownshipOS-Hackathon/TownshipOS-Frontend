@@ -4,7 +4,7 @@ import streamlit as st
 
 from core import maintenance as m
 from ui import (BORDER, FAINT, MUTED, NAVY, URGENCY_BG, URGENCY_COLOR, YELLOW, db, df, header,
-                scored_assets, section_label, topbar)
+                scope_picker, scored_assets, section_label, topbar)
 
 KIND_STYLE = {"breakdown": ("CORRECTIVE", "#D32F2F", "#FDECEC"),
               "scheduled": ("PREVENTIVE", "#2A4B8D", "#E8EEFB")}
@@ -13,7 +13,13 @@ topbar()
 header("Predictive Maintenance", "30-day failure risk per asset, from 24 months of service logs",
        chips=[("ML CORE: ONLINE", "dot"), ("Model: GBM-Township-v2.4", "plain")])
 
+project_id, building_ids = scope_picker()
+
 scored, model, metrics = scored_assets()
+scored = scored[scored["building_id"].isin(building_ids)].reset_index(drop=True)
+if scored.empty:
+    st.info("No assets registered for this scope yet.")
+    st.stop()
 logs = df("SELECT * FROM service_logs")
 top = scored.iloc[0]
 

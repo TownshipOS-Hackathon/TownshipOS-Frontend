@@ -64,7 +64,8 @@ def test_score_shape_and_drivers():
 
 def test_create_work_order(tmp_path):
     conn = connect(tmp_path / "t.db")
-    conn.execute("INSERT INTO assets VALUES('L3-B','Lift L3, Block B','lift','B','2015-01-01','OTIS Malaysia',4)")
+    conn.execute("INSERT INTO assets(id,name,type,block,installed_at,contractor,sla_hours) "
+                 "VALUES('L3-B','Lift L3, Block B','lift','B','2015-01-01','OTIS Malaysia',4)")
     wid = m.create_work_order(conn, "L3-B", 0.78, "High vibration; 2 breakdowns in 12 months")
     row = conn.execute("SELECT * FROM work_orders WHERE id=?", (wid,)).fetchone()
     assert row["asset_id"] == "L3-B" and row["status"] == "open" and row["risk"] == 0.78

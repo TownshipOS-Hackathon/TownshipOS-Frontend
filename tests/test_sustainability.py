@@ -25,7 +25,7 @@ def test_short_history_block_is_skipped():
 def test_monthly_summary():
     readings = pd.DataFrame(g.gen_readings())
     sm = s.monthly_summary(readings, "2026-08")
-    assert set(sm["blocks"]) == {"A", "B", "C", "D"}
+    assert set(sm["blocks"]) == set(g.BLOCKS)
     assert sm["total_kwh"] == sum(b["kwh"] for b in sm["blocks"].values())
     assert sm["co2e_tonnes"] == pytest.approx(sm["total_kwh"] * s.GRID_FACTOR_KG_PER_KWH / 1000, abs=0.01)
     assert "mom_kwh_pct" in sm and "mom_m3_pct" in sm

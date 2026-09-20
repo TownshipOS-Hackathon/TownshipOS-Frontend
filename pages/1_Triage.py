@@ -9,7 +9,7 @@ from core.llm import LLMUnavailable
 from core.triage import apply_triage, insert_ticket, prepare_image, triage
 from core.voice import TranscriptionUnavailable, transcribe
 from ui import (BORDER, FAINT, MUTED, NAVY, PURPLE, PURPLE_BG, URGENCY_COLOR, db, df, header,
-                metric_card, section_label, topbar, urgency_pill)
+                metric_card, scope_picker, scope_sql, section_label, topbar, urgency_pill)
 
 STATUS_STYLE = {"open": ("#B26A00", "#FFF8E1"), "assigned": ("#2A4B8D", "#E8EEFB"),
                 "closed": ("#546E7A", "#ECEFF1"), "untriaged": ("#6B7A99", "#EEF2FA")}
@@ -18,6 +18,9 @@ topbar()
 header("Complaint Triage",
        "Photo + message in → category, urgency, contractor, SLA and a bilingual reply out",
        chips=[("AI PIPELINE ONLINE", "dot")])
+
+project_id, building_ids = scope_picker()
+intake_building = building_ids[0] if len(building_ids) == 1 else None
 
 samples = [json.loads(l) for l in Path("data/complaints.jsonl").read_text(encoding="utf-8").splitlines()][:30]
 left, right = st.columns(2, gap="medium")
@@ -63,7 +66,8 @@ elif go:
             image_path = f"data/uploads/{hashlib.sha256(image_bytes).hexdigest()[:16]}{suffix}"
             Path("data/uploads").mkdir(parents=True, exist_ok=True)
             Path(image_path).write_bytes(image_bytes)
-        tid = insert_ticket(db(), text.strip() or "(photo only)", image_path)
+        tid = insert_ticket(db(), text.strip() or "(photo only)", image_path,
+                            building_id=intake_building)
         with st.spinner("Claude is reading the complaint…"):
             result = triage(text, image_bytes, photo.type if photo else None)
         apply_triage(db(), tid, result)
@@ -118,13 +122,25 @@ if "last" in st.session_state:
                     f"padding:11px 13px;font-size:12.5px;color:#2D3748;line-height:1.6'>"
                     f"{html_lib.escape(body or '')}</div>", unsafe_allow_html=True)
 
-        st.markdown(
-            f"<div style='display:flex;gap:9px;align-items:flex-start;margin-top:12px'>"
+        wa, note = st.columns([1, 1.6])
+        if wa.button("Send reply via WhatsApp", use_container_width=True, key="_wa_send"):
+            st.session_state["_wa_sent"] = tid
+        note.markdown(
+            f"<div style='display:flex;gap:9px;align-items:flex-start;padding-top:8px'>"
             f"<i class='fa-regular fa-circle-check' style='color:#2E7D32;margin-top:2px'></i>"
             f"<span style='font-size:12px;color:{MUTED};line-height:1.5'>Ticket created and contractor "
-            f"notification queued (simulated SMS &amp; WhatsApp push sent to "
-            f"{html_lib.escape(r.contractor or 'contractor')} Duty Eng).</span></div>",
+            f"notification queued for {html_lib.escape(r.contractor or 'contractor')}.</span></div>",
             unsafe_allow_html=True)
+
+        if st.session_state.get("_wa_sent") == tid:
+            st.markdown(
+                f"<div style='background:#E8F5E9;border:1px solid #C8E6C9;border-left:4px solid #2E7D32;"
+                f"border-radius:8px;padding:11px 15px;margin-top:10px;font-size:12.5px;color:#2D3748'>"
+                f"<i class='fa-brands fa-whatsapp' style='color:#25D366;margin-right:9px;font-size:15px'></i>"
+                f"Bilingual reply delivered to the resident and dispatch note pushed to "
+                f"<strong>{html_lib.escape(r.contractor or 'contractor')}</strong> duty engineer. "
+                f"<span style='color:{FAINT}'>(simulated — no message actually sent)</span></div>",
+                unsafe_allow_html=True)
 
 # ── Queue ─────────────────────────────────────────────────────────────────────
 st.write("")
@@ -132,9 +148,11 @@ with st.container(border=True):
     section_label("Ticket Queue", "fa-solid fa-list-check")
     status = st.multiselect("Status", ["untriaged", "open", "assigned", "closed"],
                             default=["untriaged", "open"], label_visibility="collapsed")
+    scope_clause, scope_params = scope_sql("building_id", building_ids)
     q = (df("SELECT id, created_at, urgency, category, contractor, sla_hours, needs_human, status, raw_text "
-            f"FROM tickets WHERE status IN ({','.join('?' * len(status))}) ORDER BY created_at DESC LIMIT 12",
-            tuple(status)) if status else df("SELECT * FROM tickets WHERE 0"))
+            f"FROM tickets WHERE {scope_clause} AND status IN ({','.join('?' * len(status))}) "
+            "ORDER BY created_at DESC LIMIT 12",
+            (*scope_params, *status)) if status else df("SELECT * FROM tickets WHERE 0"))
 
     if q.empty:
         st.markdown(f"<div style='padding:18px;text-align:center;color:{MUTED};font-size:13px'>"

@@ -6,28 +6,32 @@ import streamlit as st
 from core.llm import LLMUnavailable
 from core.sustainability import GRID_FACTOR_KG_PER_KWH, detect_anomalies, esg_narrative, monthly_summary
 from ui import (BORDER, FAINT, MUTED, NAVY, URGENCY_BG, URGENCY_COLOR, YELLOW, df, header,
-                section_label, topbar)
+                scope_picker, scope_sql, section_label, topbar)
 
-BLOCK_NAMES = {"A": "Aster Garden", "B": "Begonia Terraces", "C": "Camellia Tower", "D": "Dahlia Square"}
-BLOCK_DOT = {"A": "#1A2332", "B": "#3F51B5", "C": YELLOW, "D": "#6A1B9A"}
+DOTS = ["#1A2332", "#3F51B5", YELLOW, "#6A1B9A", "#00897B", "#C2185B", "#5D4037", "#455A64"]
 GOOD, BAD, FLAT = "#2E7D32", "#D32F2F", MUTED
 
 topbar()
+header("Sustainability",
+       f"Water & energy consumption by block vs baseline · Peninsular grid {GRID_FACTOR_KG_PER_KWH} kg CO₂/kWh",
+       chips=[("M&E TELEMETRY", "dot")])
 
-readings = df("SELECT block, month, kwh, m3 FROM utility_readings ORDER BY month")
+project_id, building_ids = scope_picker()
+scope_clause, scope_params = scope_sql("building_id", building_ids)
+
+blds = df("SELECT * FROM buildings WHERE project_id = ? ORDER BY block", (project_id,))
+BLOCK_NAMES = {b.block: b.name for b in blds.itertuples()}
+BLOCK_DOT = {b.block: DOTS[i % len(DOTS)] for i, b in enumerate(blds.itertuples())}
+
+readings = df(f"SELECT block, month, kwh, m3 FROM utility_readings WHERE {scope_clause} "
+              "ORDER BY month", scope_params)
 if readings.empty:
-    header("Sustainability", "No utility data found — run the data generator first.")
+    st.info("No utility data for this scope — run the data generator first.")
     st.stop()
 
 months = sorted(readings["month"].unique(), reverse=True)
-selected = st.session_state.get("_sus_month", months[0])
-
-header("Sustainability",
-       f"Water & energy consumption by block vs baseline · Peninsular grid {GRID_FACTOR_KG_PER_KWH} kg CO₂/kWh",
-       chips=[(f"{selected} (Current)", "plain"), ("M&E TELEMETRY", "dot")])
-
 pick_col, _ = st.columns([1, 3])
-selected = pick_col.selectbox("Month", months, key="_sus_month", label_visibility="collapsed")
+selected = pick_col.selectbox("Month", months, key="_sus_month")
 
 summary = monthly_summary(readings, selected)
 anomalies_all = detect_anomalies(readings)

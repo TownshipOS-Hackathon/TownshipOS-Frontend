@@ -93,7 +93,8 @@ elif go:
             unsafe_allow_html=True)
     else:
         tid = insert_ticket(db(), text.strip() or "(photo only)", image_path, lat, lon,
-                            location_note.strip() or None)
+                            location_note.strip() or None,
+                            building_id=st.session_state.get("building_id"))
         apply_triage(db(), tid, result)
         col = URGENCY_COLOR.get(result.urgency, "#546E7A")
         st.markdown(

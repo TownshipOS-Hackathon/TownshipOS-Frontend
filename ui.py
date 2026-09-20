@@ -236,14 +236,90 @@ def metric_card(label: str, value: str, unit: str = "", footnote: str = "",
             f"color:{value_color};letter-spacing:-1px'>{value}</span>{unit_html}</div>{foot}</div>")
 
 
+def txt(value, default: str = "—") -> str:
+    """Escaped cell text. pandas turns SQL NULLs into NaN, which is truthy — so `x or default`
+    is not enough and every table cell goes through here."""
+    import html as _html
+
+    import pandas as _pd
+    if value is None or (isinstance(value, float) and _pd.isna(value)):
+        return default
+    s = str(value).strip()
+    return _html.escape(s) if s else default
+
+
 def card_open(pad: str = "16px 18px", extra: str = "") -> str:
     return f"<div style='background:#fff;border:1px solid {BORDER};border-radius:10px;padding:{pad};{extra}'>"
+
+
+def data_table(heads: list[str], rows: list[list[str]], align: list[str] | None = None,
+               footer: list[str] | None = None) -> str:
+    """Dense cockpit table. Cells are raw HTML, so callers escape their own text."""
+    align = align or ["left"] * len(heads)
+    head = "".join(
+        f"<th style='text-align:{a};padding:9px 12px;font-size:9.5px;letter-spacing:0.8px;"
+        f"color:{MUTED};font-weight:700;text-transform:uppercase;white-space:nowrap'>{h}</th>"
+        for h, a in zip(heads, align))
+    body = "".join(
+        "<tr>" + "".join(
+            f"<td style='padding:10px 12px;border-top:1px solid {BORDER};text-align:{a};"
+            f"font-size:12.5px;color:#2D3748;vertical-align:middle'>{c}</td>"
+            for c, a in zip(row, align)) + "</tr>"
+        for row in rows)
+    if footer:
+        body += "<tr style='background:#F4F6FB'>" + "".join(
+            f"<td style='padding:11px 12px;border-top:1px solid {BORDER};text-align:{a};"
+            f"font-size:12.5px;font-weight:700;color:{NAVY}'>{c}</td>"
+            for c, a in zip(footer, align)) + "</tr>"
+    return (f"<div style='background:#fff;border:1px solid {BORDER};border-radius:10px;overflow:auto'>"
+            f"<table style='width:100%;border-collapse:collapse'>"
+            f"<thead style='background:#F4F6FB'><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>")
 
 
 # ── Data ──────────────────────────────────────────────────────────────────────
 @st.cache_resource
 def db():
     return connect("townshipos.db")
+
+
+def scope_picker() -> tuple[str | None, list[str]]:
+    """Township + building selectors. Returns (project_id, building_ids to filter on).
+
+    FM staff are pinned to the township on their staff record; group admins roam.
+    """
+    projects = db().execute("SELECT id, name FROM projects ORDER BY name").fetchall()
+    if not projects:
+        return None, []
+    pinned = st.session_state.get("project_id")
+    is_admin = st.session_state.get("role") == "admin"
+
+    pcol, bcol, _ = st.columns([1.1, 1.1, 2])
+    if is_admin or pinned is None:
+        names = {p["name"]: p["id"] for p in projects}
+        chosen = pcol.selectbox("Township", list(names), key="_scope_project_pick")
+        pid = names[chosen]
+    else:
+        pid = pinned
+        name = next((p["name"] for p in projects if p["id"] == pid), pid)
+        pcol.markdown(
+            f"<div style='padding-top:4px'><div style='font-size:10px;letter-spacing:0.9px;"
+            f"color:{MUTED};font-weight:700;text-transform:uppercase'>Township</div>"
+            f"<div style='font-size:14px;font-weight:700;color:{NAVY};margin-top:4px'>{name}</div></div>",
+            unsafe_allow_html=True)
+
+    rows = db().execute("SELECT id, block, name FROM buildings WHERE project_id = ? ORDER BY block",
+                        (pid,)).fetchall()
+    opts = {"All buildings": None} | {f"Block {r['block']} — {r['name']}": r["id"] for r in rows}
+    picked = bcol.selectbox("Building", list(opts), key=f"_scope_building_{pid}")
+    bid = opts[picked]
+    return pid, [bid] if bid else [r["id"] for r in rows]
+
+
+def scope_sql(column: str, building_ids: list[str]) -> tuple[str, tuple]:
+    """('building_id IN (?,?)', params) — safe because only the count is interpolated."""
+    if not building_ids:
+        return "1=0", ()
+    return f"{column} IN ({','.join('?' * len(building_ids))})", tuple(building_ids)
 
 
 def df(sql: str, params=()) -> pd.DataFrame:
