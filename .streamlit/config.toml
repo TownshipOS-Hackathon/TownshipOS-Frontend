@@ -1,10 +1,14 @@
 [theme]
 base = "light"
-primaryColor = "#F2B705"
-backgroundColor = "#FFFFFF"
-secondaryBackgroundColor = "#EEF2F7"
-textColor = "#0B1F3A"
+primaryColor = "#F5B700"
+backgroundColor = "#F7F8FC"
+secondaryBackgroundColor = "#FFFFFF"
+textColor = "#0F1C33"
 font = "sans serif"
 
 [server]
 headless = true
+# Windows file events are unreliable for imported modules (ui.py, core/*), so edits to
+# them were silently ignored until a restart. Polling picks them up.
+fileWatcherType = "poll"
+runOnSave = true
